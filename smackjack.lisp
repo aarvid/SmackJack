@@ -10,12 +10,29 @@
          :initarg :name
          :type symbol
          :documentation "symbol name of the lisp ajax function")
-   (parameters :reader parameters
-               :initarg :paramaters
-               :type list
-               :documentation "parameters of the lisp ajax function")
-   )
-  )
+   (remote-name
+    :accessor remote-name
+    :initarg :remote-name
+    :initform nil
+    :type symbol
+    :documentation "remote name of the lisp ajax function")
+   (method
+    :accessor http-method
+    :initarg :method
+    :initform :get
+    :type '(member :post :get)
+    :documentation "http method of the lisp ajax function")
+   (json-p
+    :accessor json-p
+    :initarg :json-p
+    :initform nil
+    :type boolean
+    :documentation "the response is a json object evaluated in the client before callback")
+   (content-type
+    :initarg :content-type :type string
+    :accessor content-type
+    :initform "text/xml; charset=\"utf-8\""
+    :documentation "The http content type that is sent with each response, ignored if json is true")))
 
 (defclass ajax-processor ()
   ((ajax-functions 
@@ -52,9 +69,10 @@
     :initarg :server-uri :initform "/ajax" :accessor server-uri
     :type string
     :documentation "The uri which is used to handle ajax request")
-   (content-type
-    :initarg :content-type :type string
-    :accessor content-type :initform "text/xml; charset=\"utf-8\""
+   (default-content-type
+    :initarg :default-content-type :type string
+    :accessor default-content-type
+    :initform "text/xml; charset=\"utf-8\""
     :documentation "The http content type that is sent with each response")
    (reply-external-format 
     :initarg :reply-external-format :type flexi-streams::external-format
@@ -86,124 +104,194 @@
 
 
 
-(defgeneric remote-function-via-ajax (processor function-name))
-(defmethod  remote-function-via-ajax ((processor ajax-processor)
-                                      function-name)
+(defgeneric remotify-function (processor function-name
+                               &key method remote-name content-type json-p))
+(defmethod  remotify-function ((processor ajax-processor) function-name
+                               &key (method :get) remote-name content-type json-p)
   (setf (gethash (symbol-name function-name) (ajax-functions processor))
-        (make-instance 'ajax-function :name function-name)))
+        (make-instance 'ajax-function
+                       :name function-name
+                       :method method
+                       :remote-name remote-name
+                       :content-type content-type
+                       :json-p json-p)))
+
+(defgeneric un-remotify-function (processor function-name))
+
+(defmethod un-remotify-function ((processor ajax-processor) symbol-or-name)
+  (let ((func-name (if (symbolp symbol-or-name)
+                       (symbol-name symbol-or-name)
+                       symbol-or-name)))
+    (unless (and func-name (stringp func-name))
+      (error "Invalid name ~S in UNEXPORT-FUNC" symbol-or-name))
+    (remhash (string-upcase func-name) (ajax-functions processor))))
 
 
-(defmacro defun-ajax (name params (processor) &body body)
+(defmacro defun-ajax (name lambda-list (processor &rest remote-keys) &body body)
   "Declares a defun that can be called from a client page.
 Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
    (do-stuff))"
   `(progn
-     (defun ,name ,params ,@body)
-     (remote-function-via-ajax ,processor ',name)))
+     (defun ,name ,lambda-list ,@body)
+     (remotify-function ,processor ',name ,@remote-keys)))
 
-(defgeneric ajax-function-name (processor name))
-(defmethod ajax-function-name ((processor ajax-processor) name)
+(defgeneric ajax-function-name (processor ajax-fn))
+(defmethod ajax-function-name ((processor ajax-processor)
+                               (ajax-fn ajax-function))
   (let ((compat (ht-simple-ajax-symbols-p processor))
-        (prefix (ajax-function-prefix processor)))
+        (prefix (ajax-function-prefix processor))
+        (name   (or (remote-name ajax-fn)
+                    (name ajax-fn))))
     (funcall (if compat #'make-ps-symbol #'identity)
              (if prefix
                  (symbolicate prefix '- name)
                  name))))
 
-(defgeneric ajax-ps-function (processor name))
-(defmethod ajax-ps-function ((processor ajax-processor) name)
+(defgeneric ajax-ps-function (processor ajax-fn))
+(defmethod ajax-ps-function ((processor ajax-processor) (ajax-fn ajax-function))
   (let* ((namespace (ajax-namespace processor))
          (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
-         (ajax-name (ajax-function-name processor name))
+         (ajax-name (ajax-function-name processor ajax-fn))
+         (lisp-name (name ajax-fn))
          (ajax-params  (mapcar (if (ht-simple-ajax-symbols-p processor)
                                    #'make-ps-symbol
                                    #'identity)
-                               (arglist name)))
+                               (arglist lisp-name)))
          (ajax-call (if (and namespace (not ajax-fns-in-ns))
                         `(@ ,namespace ajax-call)
                         'ajax-call)))
-    `(defun ,ajax-name ,ajax-params
-       (,ajax-call ,(string name) callback (array ,@ajax-params)))))
+    `(defun ,ajax-name ,(append ajax-params '(callback error-handler))
+       (,ajax-call ,(string lisp-name)
+                   (array ,@ajax-params)
+                   ,(string (http-method ajax-fn))
+                   callback
+                   error-handler))))
+
+(defun ps-http-request ()
+  '(progn
+    (defvar http-factory nil)
+    (defvar http-factories
+      (array
+       (lambda () (return (new (*x-m-l-http-request))))
+       (lambda () (return (new (*active-x-object "Msxml2.XMLHTTP"))))
+       (lambda () (return (new (*active-x-object "Microsoft.XMLHTTP"))))))
+    (defun http-new-request ()
+      (unless (= http-factory nil)
+        (return (http-factory)))
+      (let ((request nil))
+        (do* ((i 0 (1+ i))
+              (l (length http-factories))
+              (factory (aref http-factories i) (aref http-factories i)))
+             ((or (!= request null) (>= i l)))
+          (try
+           (setf request (factory))
+           (unless (= request null)
+             (setf http-factory factory))
+           (:catch (e) )))
+        (if (= request null)
+            (progn
+              (setf http-factory
+                    (lambda ()
+                      (throw (new (*error "XMLHttpRequest not supported")))))
+              (http-factory))
+            request)))))
 
 (defgeneric ps-fetch-uri (processor))
 (defmethod ps-fetch-uri ((processor ajax-processor))
   (declare (ignore processor))
-  '(defun fetch-uri (uri callback)
-    (let ((request))
-      (if -x-m-l-http-request
-          (setf request (new (funcall -x-m-l-http-request)))
-          (try
-           (setf request (new (-active-x-object "Msxml2.XMLHTTP")))
-           (:catch (e)
-             (try
-              (setf request (new (-active-x-object "Microsoft.XMLHTTP")))
-              (:catch (ee)
-                (setf request nil))))))
+  '(defun fetch-uri (uri callback &optional (method "GET") (body nil) error-handler )
+    (let ((request (http-new-request)))
       (unless request
         (alert "Browser couldn't make a request object."))
-      (with-slots (open ready-state status response-x-m-l
-                        onreadystatechange send) request 
-        (funcall open "GET" uri t)
+      (with-slots (open ready-state status status-text response-x-m-l
+                   onreadystatechange send set-request-header) request 
+        (funcall open method uri t)
         (setf onreadystatechange
               (lambda ()
                 (when (/= 4 ready-state)
                   (return))
                 (if (or (and (>= status 200) (< status 300))
                         (== status 304))
-                    (unless (== callback null)
+                    (unless (== callback nil)
                       (callback response-x-m-l))
-                    (alert (+ "Error while fetching URI " uri)))
+                    (if (== error-handler nil)
+                        (alert (+ "Error while fetching URI " uri " " status " " status-text))
+                        (error-handler request)))
                 (return)))
-        (funcall send null))
-      (delete request)
+        (when (equal method "POST")
+          (funcall set-request-header
+                   "Content-Type"
+                   "application/x-www-form-urlencoded"))
+        (funcall send body))
       (return))))
+
+
+(defun  ps-encode-args ()
+  '(defun ajax-encode-args (args)
+     (let ((s ""))
+       (dotimes (i (length args) s)
+         (when (> i 0)
+           (incf s "&"))
+         (incf s (+ "arg" i "=" (encode-u-r-i-component (aref args i))))))))
 
 (defgeneric ps-ajax-call (processor))
 (defmethod ps-ajax-call ((processor ajax-processor))  
-  `(defun ajax-call (func callback args)
+  `(defun ajax-call (func args &optional (method "GET") callback error-handler)
+     (let ((uri (+ ,(server-uri processor) "/"
+                   (encode-u-r-i-component func) "/"))
+           (ajax-args (ajax-encode-args args))
+           (body nil))
+       (when (and (equal method "GET")
+                  (> (length args) 0))
+         (incf uri (+ "?" ajax-args)))
+       (when (equal method "POST")
+         (setf body ajax-args))
+       (fetch-uri uri callback method body error-handler))))
+
+(defgeneric ps-ajax-post (processor))
+(defmethod ps-ajax-post ((processor ajax-processor))  
+  `(defun ajax-post (func callback args)
      (let ((uri (+ ,(server-uri processor) "/"
                    (encode-u-r-i-component func) "/")))
-       (when (> (length args) 0)
-         (incf uri "?")
-         (dotimes (i (length args))
-           (when (> i 0)
-             (incf uri "&"))
-           (incf uri (+ "arg" i "=" (encode-u-r-i-component (aref args i))))))
-       (fetch-uri uri callback))))
+       (fetch-uri uri callback "POST" (ajax-encode-args args)))))
 
 
 (defgeneric generate-prologue-javascript (processor))
 (defmethod generate-prologue-javascript ((processor ajax-processor))
   (let* ((namespace (ajax-namespace processor))
-        (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
-        (ajax-fns nil)
-        (ajax-globals nil))
+         (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
+         (ajax-fns nil)
+         (ajax-globals nil))
     (maphash-values (lambda (fn)
-                      (with-slots (name) fn  
-                        (push (ajax-ps-function processor name) ajax-fns)
-                        (when ajax-fns-in-ns
-                          (let ((ajax-name (ajax-function-name processor name)))
-                            (push `(setf (@ ,namespace ,ajax-name) ,ajax-name)
-                                  ajax-globals)))))
+                      (push (ajax-ps-function processor fn) ajax-fns)
+                      (when ajax-fns-in-ns
+                        (let ((ajax-name (ajax-function-name processor fn)))
+                          (push `(setf (@ ,namespace ,ajax-name) ,ajax-name)
+                                ajax-globals))))
                     (ajax-functions processor))
     (ps*
      (if namespace
-          `(progn
-             (var ,namespace (create))
-             (funcall
-              (lambda ()
-                ,(ps-fetch-uri processor)
-                ,(ps-ajax-call processor)
-                ,(if ajax-fns-in-ns
-                   `(progn ,@ajax-fns ,@ajax-globals)
-                   `(setf (@ ,namespace ajax-call) ajax-call))
-                (return)))
-             ,(unless ajax-fns-in-ns
-                   `(progn ,@ajax-fns)))
-          (list* 'progn
-                 (ps-fetch-uri processor)
-                 (ps-ajax-call processor)
-                 ajax-fns)))))
+         `(progn
+            (var ,namespace (create))
+            (funcall
+             (lambda ()
+               ,(ps-http-request)
+               ,(ps-fetch-uri processor)
+               ,(ps-encode-args)
+               ,(ps-ajax-call processor)
+               ,(if ajax-fns-in-ns
+                    `(progn ,@ajax-fns ,@ajax-globals)
+                    `(progn
+                       (setf (@ ,namespace ajax-call) ajax-call)))
+               (return)))
+            ,(unless ajax-fns-in-ns
+               `(progn ,@ajax-fns)))
+         (list* 'progn
+                (ps-http-request)
+                (ps-fetch-uri processor)
+                (ps-encode-args)
+                (ps-ajax-call processor)
+                ajax-fns)))))
 
 
 
@@ -238,17 +326,22 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
    the response."
   (let* ((fn-name (string-trim "/" (subseq (script-name* *request*)
                                            (length (server-uri processor)))))
-         (fn (name (gethash fn-name (ajax-functions processor))))
-         (args (mapcar #'cdr (get-parameters* *request*))))
+         (fn  (gethash fn-name (ajax-functions processor)))
+         (args (mapcar #'cdr (funcall (if (eq :post (http-method fn))
+                                          #'post-parameters*
+                                          #'get-parameters*)
+                                      *request*))))
     (unless fn
       (error "Error in call-lisp-function: no such function: ~A" fn-name))
-    
+    (unless (= (length (arglist (name fn))) (length args))
+      (error "Error in call-lisp-function: wrong number args: ~A ~A" fn-name args))
     (setf (reply-external-format*) (reply-external-format processor))
-    (setf (content-type*) (content-type processor))
+    (setf (content-type*) (or (content-type fn)
+                              (default-content-type processor)))
     (no-cache)
     (concatenate 'string
                  "<?xml version=\"1.0\"?>"
                  (string #\newline)
                  "<response xmlns='http://www.w3.org/1999/xhtml'>"
-                 (apply fn args)
+                 (apply (name fn) args)
                  "</response>")))

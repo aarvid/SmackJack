@@ -50,6 +50,11 @@
 (defun-ajax say-hi (name) (*ajax-processor*)
   (concatenate 'string "Hi " name ", nice to meet you."))
 
+(defun-ajax say-bye (name) (*ajax-processor* :method :post)
+  (concatenate 'string "Bye " name ", nice meeting you."))
+
+(defun-ajax force-error (name) (*ajax-processor*)
+  (error  "~A, what a lousy name." name))
 
 ;;;;; We can call this function from Lisp, for example if we want to
 ;;;;; test it:
@@ -108,20 +113,28 @@
       (:script :type "text/javascript" "
 var saveResponse;
 // will show the greeting in a message box
-function callback(response) {
+function myCallback(response) {
   saveResponse = response;
   alert(response.firstChild.firstChild.nodeValue);
 }
 
 // calls our Lisp function with the value of the text field
 function sayHi() {
-  smackjack.sayHi(document.getElementById('name').value, callback);
+  smackjack.sayHi(document.getElementById('name').value, myCallback);
+}
+function sayBye() {
+  smackjack.sayBye(document.getElementById('name').value, myCallback);
+}
+function forceError() {
+  smackjack.forceError(document.getElementById('name').value, myCallback);
 }
 "))
      (:body
       (:p "Please enter your name: " 
           (:input :id "name" :type "text"))
-      (:p (:a :href "javascript:sayHi()" "Say Hi!"))))))
+      (:p (:a :href "javascript:sayHi()" "Say Hi!"))
+      (:p (:a :href "javascript:sayBye()" "Say Bye!"))
+      (:p (:a :href "javascript:forceError()" "Force Error!"))))))
 
 
 ;;;;; Direct your web browser to http://localhost:8000 and try it out!
