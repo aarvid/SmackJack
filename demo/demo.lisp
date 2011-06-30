@@ -1,4 +1,5 @@
 ;;;;; Copyright (c) 2010, Martin Loetzsch
+;;;;; Copyright (c) 2011, Andrew Peterson
 ;;;;; All rights reserved.
 
 ;;;;; Redistribution and use in source and binary forms, with or
@@ -28,14 +29,12 @@
 ;;;;; THE POSSIBILITY OF SUCH DAMAGE.
 
 ;;;;; 
-;;;;; This file provides a brief demo of how to use ht-simple-ajax
-;;;;;
-;;;;; For more information, go to http://martin-loetzsch.de/ht-simple-ajax
+;;;;; This file provides a brief demo of how to use smackjack
 ;;;;;
 
-;;(asdf:operate 'asdf:load-op :smackjack)
 
-(in-package :smackjack)
+
+(in-package :smackjack-demo)
 
 
 
@@ -47,14 +46,23 @@
 ;;;;; Now we can define a function that we want to call from a web
 ;;;;; page. This function will take 'name' as an argument and return a
 ;;;;; string with a greeting.
-(defun-ajax say-hi (name) (*ajax-processor*)
+(defun-ajax say-hi (name) (*ajax-processor* :callback-data :response-xml)
   (concatenate 'string "Hi " name ", nice to meet you."))
 
-(defun-ajax say-bye (name) (*ajax-processor* :method :post)
+(defun-ajax say-bye (name) (*ajax-processor* :method :post
+                                             :callback-data :response-xml-text)
   (concatenate 'string "Bye " name ", nice meeting you."))
 
-(defun-ajax force-error (name) (*ajax-processor*)
-  (error  "~A, what a lousy name." name))
+(defun-ajax force-error (name) (*ajax-processor* :callback-data :response-xml)
+;;  (error  "~A, what a lousy name." name)
+  "<error> </abigerror>" )
+
+(defun-ajax calc-age-day-of-birth (name birthday)
+    (*ajax-processor* :method :post :callback-data :json)
+  (format nil "{ \"name\" : ~s, \"age\" : 42, \"dayOfBirth\" : \"Tuesday\" }" name))
+
+;;  (let ((ps:*js-string-delimiter* #\"))
+;;    (ps:ps (create :name (lisp name) :age 42 "dayOfBirth" "Tuesday"))))
 
 ;;;;; We can call this function from Lisp, for example if we want to
 ;;;;; test it:
@@ -101,32 +109,41 @@
 ;;;;; calls our function.  For rendering html, we will use cl-who in
 ;;;;; this example (http://weitz.de/cl-who/). Note that smackjack
 ;;;;; can be used with any other template/ rendering system
-(asdf:operate 'asdf:load-op :cl-who)
-(use-package :cl-who)
 
 (define-easy-handler (main-page :uri "/") ()
   (with-html-output-to-string (*standard-output* nil :prologue t)
     (:html :xmlns "http://www.w3.org/1999/xhtml"
      (:head
       (:title "smackjack demo")
-      (princ (generate-prologue *ajax-processor*))
-      (:script :type "text/javascript" "
+      (str (generate-prologue *ajax-processor*))
+      (:script :type "text/javascript" " 
 var saveResponse;
 // will show the greeting in a message box
-function myCallback(response) {
-  saveResponse = response;
+function myCallbackXml(response) {
   alert(response.firstChild.firstChild.nodeValue);
+}
+function myCallbackText(response) {
+  alert(response);
+}
+function myCallbackJSON(response) {
+  alert(response.age + ' years old and you were born on a ' +response.dayOfBirth );
+
 }
 
 // calls our Lisp function with the value of the text field
 function sayHi() {
-  smackjack.sayHi(document.getElementById('name').value, myCallback);
+  smackjack.sayHi(document.getElementById('name').value, myCallbackXml);
 }
 function sayBye() {
-  smackjack.sayBye(document.getElementById('name').value, myCallback);
+  smackjack.sayBye(document.getElementById('name').value, myCallbackText);
 }
 function forceError() {
-  smackjack.forceError(document.getElementById('name').value, myCallback);
+  smackjack.forceError(document.getElementById('name').value, myCallbackXml);
+}
+function calcAgeDayOfBirth() {
+  smackjack.calcAgeDayOfBirth(document.getElementById('name').value,
+                              document.getElementById('birthday').value,
+                              myCallbackJSON);
 }
 "))
      (:body
@@ -134,7 +151,10 @@ function forceError() {
           (:input :id "name" :type "text"))
       (:p (:a :href "javascript:sayHi()" "Say Hi!"))
       (:p (:a :href "javascript:sayBye()" "Say Bye!"))
-      (:p (:a :href "javascript:forceError()" "Force Error!"))))))
+      (:p (:a :href "javascript:forceError()" "Force Error!"))
+      (:p "Please enter your date of birth (dd/mm/yyyy): " 
+          (:input :id "birthday" :type "text"))
+      (:p (:a :href "javascript:calcAgeDayOfBirth()" "Age and Date of birth with JSON!"))))))
 
 
 ;;;;; Direct your web browser to http://localhost:8000 and try it out!

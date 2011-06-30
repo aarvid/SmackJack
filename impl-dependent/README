@@ -1,0 +1,7 @@
+CLAZY Implementation Dependencies
+
+The implementation dependencies boil down to ARGLIST, which I happily
+stole from Slime.  I trust nobody will get offended by this such a
+theft.
+
+Marco Antoniotti 20080410

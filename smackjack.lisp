@@ -22,17 +22,17 @@
     :initform :get
     :type '(member :post :get)
     :documentation "http method of the lisp ajax function")
-   (json-p
-    :accessor json-p
-    :initarg :json-p
-    :initform nil
-    :type boolean
-    :documentation "the response is a json object evaluated in the client before callback")
+   (callback-data
+    :accessor callback-data
+    :initarg :callback-data
+    :initform :response-xml
+    :type '(member :request-object :response-xml :response-text :response-xml-text :json)
+    :documentation "argument passed to callback function from ajax response.  Content-type should correspond.")
    (content-type
     :initarg :content-type :type string
     :accessor content-type
-    :initform "text/xml; charset=\"utf-8\""
-    :documentation "The http content type that is sent with each response, ignored if json is true")))
+    :initform "text/xml;"
+    :documentation "The http content type that is sent with each response")))
 
 (defclass ajax-processor ()
   ((ajax-functions 
@@ -105,16 +105,16 @@
 
 
 (defgeneric remotify-function (processor function-name
-                               &key method remote-name content-type json-p))
+                               &key method remote-name content-type callback-data))
 (defmethod  remotify-function ((processor ajax-processor) function-name
-                               &key (method :get) remote-name content-type json-p)
+                               &key (method :get) remote-name content-type callback-data)
   (setf (gethash (symbol-name function-name) (ajax-functions processor))
         (make-instance 'ajax-function
                        :name function-name
                        :method method
                        :remote-name remote-name
                        :content-type content-type
-                       :json-p json-p)))
+                       :callback-data callback-data)))
 
 (defgeneric un-remotify-function (processor function-name))
 
@@ -165,7 +165,8 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                    (array ,@ajax-params)
                    ,(string (http-method ajax-fn))
                    callback
-                   error-handler))))
+                   error-handler
+                   ,(ajax-response-process ajax-fn)))))
 
 (defun ps-http-request ()
   '(progn
@@ -196,10 +197,35 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
               (http-factory))
             request)))))
 
+(defgeneric ps-ajax-response-processes (processor))
+(defmethod ps-ajax-response-processes ((processor ajax-processor))
+  (declare (ignore processor))
+  '(progn
+    (defun identity (x) x)
+    (defun response-xml (request)
+      (@ request response-x-m-l))
+    (defun response-text (request)
+      (@ request response-text))
+    (defun response-xml-text (request)
+      (@ request response-x-m-l first-child first-child node-value))
+    (defun response-json (request)
+      (funcall (@ *json* parse) (@ request response-text)))))
+
+(defgeneric ajax-response-process (ajax-fn))
+(defmethod ajax-response-process ((ajax-fn ajax-function))
+  (case (callback-data ajax-fn)
+    (:request-object 'identity)
+    (:response-xml 'response-xml)
+    (:response-text 'response-text)
+    (:response-xml-text 'response-xml-text)
+    (:json 'response-json)
+    (otherwise 'identity)))
+       
+  
 (defgeneric ps-fetch-uri (processor))
 (defmethod ps-fetch-uri ((processor ajax-processor))
   (declare (ignore processor))
-  '(defun fetch-uri (uri callback &optional (method "GET") (body nil) error-handler )
+  '(defun fetch-uri (uri callback &optional (method "GET") (body nil) error-handler process)
     (let ((request (http-new-request)))
       (unless request
         (alert "Browser couldn't make a request object."))
@@ -213,7 +239,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                 (if (or (and (>= status 200) (< status 300))
                         (== status 304))
                     (unless (== callback nil)
-                      (callback response-x-m-l))
+                      (callback (process request)))
                     (if (== error-handler nil)
                         (alert (+ "Error while fetching URI " uri " " status " " status-text))
                         (error-handler request)))
@@ -236,7 +262,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
 
 (defgeneric ps-ajax-call (processor))
 (defmethod ps-ajax-call ((processor ajax-processor))  
-  `(defun ajax-call (func args &optional (method "GET") callback error-handler)
+  `(defun ajax-call (func args &optional (method "GET") callback error-handler process)
      (let ((uri (+ ,(server-uri processor) "/"
                    (encode-u-r-i-component func) "/"))
            (ajax-args (ajax-encode-args args))
@@ -246,14 +272,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
          (incf uri (+ "?" ajax-args)))
        (when (equal method "POST")
          (setf body ajax-args))
-       (fetch-uri uri callback method body error-handler))))
+       (fetch-uri uri callback method body error-handler process))))
 
-(defgeneric ps-ajax-post (processor))
-(defmethod ps-ajax-post ((processor ajax-processor))  
-  `(defun ajax-post (func callback args)
-     (let ((uri (+ ,(server-uri processor) "/"
-                   (encode-u-r-i-component func) "/")))
-       (fetch-uri uri callback "POST" (ajax-encode-args args)))))
+
 
 
 (defgeneric generate-prologue-javascript (processor))
@@ -276,6 +297,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
             (funcall
              (lambda ()
                ,(ps-http-request)
+               ,(ps-ajax-response-processes processor)
                ,(ps-fetch-uri processor)
                ,(ps-encode-args)
                ,(ps-ajax-call processor)
@@ -288,6 +310,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                `(progn ,@ajax-fns)))
          (list* 'progn
                 (ps-http-request)
+                (ps-ajax-response-processes processor)
                 (ps-fetch-uri processor)
                 (ps-encode-args)
                 (ps-ajax-call processor)
@@ -318,6 +341,64 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
    script in the <head> </head> of each html page"
   (html-script-cdata (generate-prologue-javascript processor)))
 
+(defgeneric get-content-type (processor ajax-fn))
+(defmethod get-content-type ((processor ajax-processor) (ajax-fn ajax-function))
+  (case (callback-data ajax-fn)
+    ((:response-xml :response-xml-text) "text/xml")
+    (:response-text "text/plain")
+    (:json "application/json")
+    (otherwise (or (content-type ajax-fn)
+                   (default-content-type processor)))))
+
+;; function stolen from cl-who
+;;; Copyright (c) 2003-2008, Dr. Edmund Weitz. All rights reserved.
+(defun escape-string (string)
+  "Escape all characters in STRING which pass TEST. This function is
+not guaranteed to return a fresh string.  Note that you can pass NIL
+for STRING which'll just be returned."
+  (flet ((escape-char-p (char)
+           (or (find char "<>&'\"")
+               (> (char-code char) 127))))
+    (let ((first-pos (position-if #'escape-char-p string))
+          (format-string "&#x~x;" ))
+      (if (not first-pos)
+          ;; nothing to do, just return STRING
+          string
+          (with-output-to-string (s)
+            (loop with len = (length string)
+                  for old-pos = 0 then (1+ pos)
+                  for pos = first-pos
+                    then (position-if #'escape-char-p string :start old-pos)
+                  ;; now the characters from OLD-POS to (excluding) POS
+                  ;; don't have to be escaped while the next character has to
+                  for char = (and pos (char string pos))
+                  while pos
+                  do (write-sequence string s :start old-pos :end pos)
+                     (case char
+                       ((#\<)
+                        (write-sequence "&lt;" s))
+                       ((#\>)
+                        (write-sequence "&gt;" s))
+                       ((#\&)
+                        (write-sequence "&amp;" s))
+                       ((#\')
+                        (write-sequence "&#039;" s))
+                       ((#\")
+                        (write-sequence "&quot;" s))
+                       (otherwise
+                        (format s format-string (char-code char))))
+                  while (< (1+ pos) len)
+                  finally (unless pos
+                            (write-sequence string s :start old-pos))))))))
+
+
+(defun xml-wrapper (string)
+   (concatenate 'string
+                 "<?xml version=\"1.0\"?>"
+                 (string #\newline)
+                 "<response xmlns='http://www.w3.org/1999/xhtml'>"
+                 (escape-string string)
+                 "</response>"))
 
 
 (defun call-lisp-function (processor)
@@ -336,12 +417,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     (unless (= (length (arglist (name fn))) (length args))
       (error "Error in call-lisp-function: wrong number args: ~A ~A" fn-name args))
     (setf (reply-external-format*) (reply-external-format processor))
-    (setf (content-type*) (or (content-type fn)
-                              (default-content-type processor)))
+    (setf (content-type*) (get-content-type processor fn))
     (no-cache)
-    (concatenate 'string
-                 "<?xml version=\"1.0\"?>"
-                 (string #\newline)
-                 "<response xmlns='http://www.w3.org/1999/xhtml'>"
-                 (apply (name fn) args)
-                 "</response>")))
+    (funcall (if (search "xml" (content-type*))
+                 #'xml-wrapper
+                 #'identity)
+             (apply (name fn) args))))
