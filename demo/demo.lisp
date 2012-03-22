@@ -50,16 +50,21 @@
   (concatenate 'string "Hi " name ", nice to meet you."))
 
 (defun-ajax say-bye (name) (*ajax-processor* :method :post
-                                             :callback-data :response-xml-text)
+                                             :callback-data :response-text)
   (concatenate 'string "Bye " name ", nice meeting you."))
 
 (defun-ajax force-error (name) (*ajax-processor* :callback-data :response-xml)
-;;  (error  "~A, what a lousy name." name)
-  "<error> </abigerror>" )
+  (error  "~A, what a lousy name." name)
+;;  "<error> </abigerror>"
+  )
 
-(defun-ajax calc-age-day-of-birth (name birthday)
+(defun-ajax calc-age-day-of-birth (name birthday-dd birthday-mm birthday-yyyy)
     (*ajax-processor* :method :post :callback-data :json)
-  (format nil "{ \"name\" : ~s, \"age\" : 42, \"dayOfBirth\" : \"Tuesday\" }" name))
+  (let ((birthday (local-time:encode-timestamp 0 0 0 0 (parse-integer birthday-dd)  (parse-integer birthday-mm)  (parse-integer birthday-yyyy))))
+    (format nil "{ \"name\" : ~s, \"age\" : ~a, \"dayOfBirth\" : ~s }"
+            name
+            (local-time:timestamp-whole-year-difference (local-time:now) birthday)
+            (local-time:format-timestring nil birthday :format '(:long-weekday)))))
 
 ;;  (let ((ps:*js-string-delimiter* #\"))
 ;;    (ps:ps (create :name (lisp name) :age 42 "dayOfBirth" "Tuesday"))))
@@ -71,7 +76,7 @@
 
 ;;;;; Next, we setup and start a hunchentoot web server:
 (defparameter *my-server* 
-  (start (make-instance 'acceptor :address "localhost" :port 8000)))
+  (start (make-instance 'easy-acceptor :address "localhost" :port 8000)))
 
 
 ;;;;; We add our ajax processor to the hunchentoot dispatch table
@@ -126,7 +131,7 @@ function myCallbackText(response) {
   alert(response);
 }
 function myCallbackJSON(response) {
-  alert(response.age + ' years old and you were born on a ' +response.dayOfBirth );
+  alert(response.name + ' is '+ response.age + ' years old and was born on a ' +response.dayOfBirth );
 
 }
 
@@ -142,7 +147,9 @@ function forceError() {
 }
 function calcAgeDayOfBirth() {
   smackjack.calcAgeDayOfBirth(document.getElementById('name').value,
-                              document.getElementById('birthday').value,
+                              document.getElementById('birthday-dd').value,
+                              document.getElementById('birthday-mm').value,
+                              document.getElementById('birthday-yyyy').value,
                               myCallbackJSON);
 }
 "))
@@ -153,7 +160,9 @@ function calcAgeDayOfBirth() {
       (:p (:a :href "javascript:sayBye()" "Say Bye!"))
       (:p (:a :href "javascript:forceError()" "Force Error!"))
       (:p "Please enter your date of birth (dd/mm/yyyy): " 
-          (:input :id "birthday" :type "text"))
+          (:input :id "birthday-dd" :type "text" :size "2" :maxlength "2") " / "
+          (:input :id "birthday-mm" :type "text" :size "2" :maxlength "2") " / "
+          (:input :id "birthday-yyyy" :type "text":size "4" :maxlength "4"))
       (:p (:a :href "javascript:calcAgeDayOfBirth()" "Age and Date of birth with JSON!"))))))
 
 

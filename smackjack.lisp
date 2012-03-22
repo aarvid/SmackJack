@@ -173,29 +173,29 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     (defvar http-factory nil)
     (defvar http-factories
       (array
-       (lambda () (return (new (*x-m-l-http-request))))
-       (lambda () (return (new (*active-x-object "Msxml2.XMLHTTP"))))
-       (lambda () (return (new (*active-x-object "Microsoft.XMLHTTP"))))))
+       (lambda () (new (*x-m-l-http-request)))
+       (lambda () (new (*active-x-object "Msxml2.XMLHTTP")))
+       (lambda () (new (*active-x-object "Microsoft.XMLHTTP")))))
     (defun http-new-request ()
-      (unless (= http-factory nil)
-        (return (http-factory)))
-      (let ((request nil))
-        (do* ((i 0 (1+ i))
-              (l (length http-factories))
-              (factory (aref http-factories i) (aref http-factories i)))
-             ((or (!= request null) (>= i l)))
-          (try
-           (setf request (factory))
-           (unless (= request null)
-             (setf http-factory factory))
-           (:catch (e) )))
-        (if (= request null)
-            (progn
-              (setf http-factory
-                    (lambda ()
-                      (throw (new (*error "XMLHttpRequest not supported")))))
-              (http-factory))
-            request)))))
+      (if http-factory
+          (http-factory)
+          (let ((request nil))
+            (do* ((i 0 (1+ i))
+                  (l (length http-factories))
+                  (factory (aref http-factories i) (aref http-factories i)))
+                 ((or (/= request null) (>= i l)))
+              (try
+               (setf request (factory))
+               (unless (= request null)
+                 (setf http-factory factory))
+               (:catch (e) )))
+            (if (= request null)
+                (progn
+                  (setf http-factory
+                        (lambda ()
+                          (throw (new (*error "XMLHttpRequest not supported")))))
+                  (http-factory))
+                request))))))
 
 (defgeneric ps-ajax-response-processes (processor))
 (defmethod ps-ajax-response-processes ((processor ajax-processor))
@@ -234,22 +234,21 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
         (funcall open method uri t)
         (setf onreadystatechange
               (lambda ()
-                (when (/= 4 ready-state)
-                  (return))
-                (if (or (and (>= status 200) (< status 300))
-                        (== status 304))
-                    (unless (== callback nil)
-                      (callback (process request)))
-                    (if (== error-handler nil)
-                        (alert (+ "Error while fetching URI " uri " " status " " status-text))
-                        (error-handler request)))
-                (return)))
+                (when (equal 4 ready-state)
+                  (if (or (and (>= status 200) (< status 300))
+                          (equal status 304))
+                      (unless (equal callback nil)
+                        (callback (process request)))
+                      (if (equal error-handler nil)
+                          (alert (+ "Error while fetching URI " uri " " status " " status-text))
+                          (error-handler request))))
+                nil))
         (when (equal method "POST")
           (funcall set-request-header
                    "Content-Type"
                    "application/x-www-form-urlencoded"))
         (funcall send body))
-      (return))))
+      nil)))
 
 
 (defun  ps-encode-args ()
@@ -305,7 +304,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                     `(progn ,@ajax-fns ,@ajax-globals)
                     `(progn
                        (setf (@ ,namespace ajax-call) ajax-call)))
-               (return)))
+               nil))
             ,(unless ajax-fns-in-ns
                `(progn ,@ajax-fns)))
          (list* 'progn
@@ -394,7 +393,7 @@ for STRING which'll just be returned."
 
 (defun xml-wrapper (string)
    (concatenate 'string
-                 "<?xml version=\"1.0\"?>"
+                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                  (string #\newline)
                  "<response xmlns='http://www.w3.org/1999/xhtml'>"
                  (escape-string string)

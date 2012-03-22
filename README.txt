@@ -12,3 +12,10 @@ generated javascript.
 
 Current version is compatible with ht-simple-ajax but it lacks many features
 of ht-ajax.
+
+The following features are addition to those available in ht-simple-ajax:
+
+*  AJAX via Post as well as Get
+*  response can be text, xml or json.
+*  optional javascript namespaces to encapsulate generated javascript functions.
+
