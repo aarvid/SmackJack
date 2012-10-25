@@ -4,6 +4,7 @@
   :serial t
   :depends-on (#:alexandria
                #:hunchentoot
+               #:cl-json
                #:parenscript)
   :components ((:file "package")
                (:file "smackjack")

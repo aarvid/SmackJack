@@ -65,6 +65,12 @@
     :type boolean
     :documentation "use ht-simple-ajax symbol processor to generate
                     compatible ht-simple-ajax compatible code")
+   (json-args-p  ;; should be removed in the future.
+    :initarg :json-args-p
+    :accessor json-args-p
+    :initform t
+    :type boolean
+    :documentation "ajax function arguments are passed using json")
    (server-uri 
     :initarg :server-uri :initform "/ajax" :accessor server-uri
     :type string
@@ -83,7 +89,8 @@
   ((ajax-namespace :initform nil)
    (ajax-functions-namespace-p :initform nil)
    (ajax-function-prefix :initform 'ajax)
-   (ht-simple-ajax-symbols-p :initform t)))
+   (ht-simple-ajax-symbols-p :initform t)
+   (json-args-p :initform nil)))
 
 (defgeneric create-ajax-dispatcher (processor))
 (defmethod create-ajax-dispatcher ((processor ajax-processor))
@@ -207,7 +214,13 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     (defun response-text (request)
       (@ request response-text))
     (defun response-xml-text (request)
-      (@ request response-x-m-l first-child first-child node-value))
+      (let ((result "")
+            (n (@ request response-x-m-l first-child)))
+        (when n
+          (setf n (@ n first-child))
+          (when n
+            (setf result (@ n node-value))))
+        result))
     (defun response-json (request)
       (funcall (@ *json* parse) (@ request response-text)))))
 
@@ -250,14 +263,18 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
         (funcall send body))
       nil)))
 
-
-(defun  ps-encode-args ()
-  '(defun ajax-encode-args (args)
+(defgeneric ps-encode-args (processor))
+(defmethod ps-encode-args ((processor ajax-processor))
+  `(defun ajax-encode-args (args)
      (let ((s ""))
        (dotimes (i (length args) s)
          (when (> i 0)
            (incf s "&"))
-         (incf s (+ "arg" i "=" (encode-u-r-i-component (aref args i))))))))
+         (incf s (+ "arg" i "="
+                    (encode-u-r-i-component
+                     ,(if (json-args-p processor)
+                          '(chain *json* (stringify (aref args i)))
+                          '(aref args i)))))))))
 
 (defgeneric ps-ajax-call (processor))
 (defmethod ps-ajax-call ((processor ajax-processor))  
@@ -298,7 +315,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                ,(ps-http-request)
                ,(ps-ajax-response-processes processor)
                ,(ps-fetch-uri processor)
-               ,(ps-encode-args)
+               ,(ps-encode-args processor)
                ,(ps-ajax-call processor)
                ,(if ajax-fns-in-ns
                     `(progn ,@ajax-fns ,@ajax-globals)
@@ -311,7 +328,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                 (ps-http-request)
                 (ps-ajax-response-processes processor)
                 (ps-fetch-uri processor)
-                (ps-encode-args)
+                (ps-encode-args processor)
                 (ps-ajax-call processor)
                 ajax-fns)))))
 
@@ -407,7 +424,11 @@ for STRING which'll just be returned."
   (let* ((fn-name (string-trim "/" (subseq (script-name* *request*)
                                            (length (server-uri processor)))))
          (fn  (gethash fn-name (ajax-functions processor)))
-         (args (mapcar #'cdr (funcall (if (eq :post (http-method fn))
+         (args (mapcar (compose (if (json-args-p processor)
+                                    #'json:decode-json-from-string
+                                    #'identity)
+                                #'cdr)
+                       (funcall (if (eq :post (http-method fn))
                                           #'post-parameters*
                                           #'get-parameters*)
                                       *request*))))
