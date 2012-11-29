@@ -5,9 +5,11 @@
   :depends-on (#:alexandria
                #:hunchentoot
                #:cl-json
-               #:parenscript)
+               #:parenscript
+               #:cl-containers)
   :components ((:file "package")
                (:file "smackjack")
+               (:file "pusher")
                (:module "impl-dependent"
                 :components ((:file
                               #+lispworks

@@ -5,5 +5,7 @@
   (:shadowing-import-from #:parenscript :switch)
   (:export :ajax-processor :ht-simple-ajax-processor
            :defun-ajax
-           :create-ajax-dispatcher :generate-prologue))
+           :create-ajax-dispatcher :generate-prologue
+           :ajax-pusher
+           :defun-push))
 

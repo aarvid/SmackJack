@@ -5,18 +5,20 @@
 
 ;;; "smackjack" goes here. Hacks and glory await!
 
-(defclass ajax-function ()
+(defclass remote-function ()
   ((name :reader name
          :initarg :name
          :type symbol
-         :documentation "symbol name of the lisp ajax function")
+         :documentation "symbol name of the lisp function")
    (remote-name
     :accessor remote-name
     :initarg :remote-name
     :initform nil
     :type symbol
-    :documentation "remote name of the lisp ajax function")
-   (method
+    :documentation "remote name of the function")))
+
+(defclass ajax-function (remote-function)
+  ((method
     :accessor http-method
     :initarg :method
     :initform :get
@@ -96,7 +98,7 @@
 (defmethod create-ajax-dispatcher ((processor ajax-processor))
   "Creates a hunchentoot dispatcher for an ajax processor"
   (create-prefix-dispatcher (server-uri processor)
-                            #'(lambda () (call-lisp-function processor))))
+                            #'(lambda () (process-ajax-request processor))))
 
 
 (defun make-js-symbol (symbol)
@@ -144,7 +146,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
 
 (defgeneric ajax-function-name (processor ajax-fn))
 (defmethod ajax-function-name ((processor ajax-processor)
-                               (ajax-fn ajax-function))
+                               (ajax-fn remote-function))
   (let ((compat (ht-simple-ajax-symbols-p processor))
         (prefix (ajax-function-prefix processor))
         (name   (or (remote-name ajax-fn)
@@ -154,16 +156,20 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                  (symbolicate prefix '- name)
                  name))))
 
+(defgeneric ajax-ps-parameters (processor ajax-fn))
+(defmethod ajax-ps-parameters ((processor ajax-processor) (ajax-fn ajax-function))
+  (mapcar (if (ht-simple-ajax-symbols-p processor)
+              #'make-ps-symbol
+              #'identity)
+          (arglist (name ajax-fn))))
+
 (defgeneric ajax-ps-function (processor ajax-fn))
 (defmethod ajax-ps-function ((processor ajax-processor) (ajax-fn ajax-function))
   (let* ((namespace (ajax-namespace processor))
          (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
          (ajax-name (ajax-function-name processor ajax-fn))
          (lisp-name (name ajax-fn))
-         (ajax-params  (mapcar (if (ht-simple-ajax-symbols-p processor)
-                                   #'make-ps-symbol
-                                   #'identity)
-                               (arglist lisp-name)))
+         (ajax-params (ajax-ps-parameters processor ajax-fn)  )
          (ajax-call (if (and namespace (not ajax-fns-in-ns))
                         `(@ ,namespace ajax-call)
                         'ajax-call)))
@@ -241,7 +247,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
   '(defun fetch-uri (uri callback &optional (method "GET") (body nil) error-handler process)
     (let ((request (http-new-request)))
       (unless request
-        (alert "Browser couldn't make a request object."))
+        (chain console (log "Browser couldn't make a request object.")))
       (with-slots (open ready-state status status-text response-x-m-l
                    onreadystatechange send set-request-header) request 
         (funcall open method uri t)
@@ -253,7 +259,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                       (unless (equal callback nil)
                         (callback (process request)))
                       (if (equal error-handler nil)
-                          (alert (+ "Error while fetching URI " uri " " status " " status-text))
+                          (chain console (log (+ "Error while fetching URI " uri " " status " " status-text)))
                           (error-handler request))))
                 nil))
         (when (equal method "POST")
@@ -416,30 +422,41 @@ for STRING which'll just be returned."
                  (escape-string string)
                  "</response>"))
 
-
-(defun call-lisp-function (processor)
+(defgeneric process-ajax-request (processor))
+(defmethod process-ajax-request ((processor ajax-processor))
   "This is called from hunchentoot on each ajax request. It parses the 
    parameters from the http request, calls the lisp function and returns
    the response."
   (let* ((fn-name (string-trim "/" (subseq (script-name* *request*)
                                            (length (server-uri processor)))))
-         (fn  (gethash fn-name (ajax-functions processor)))
-         (args (mapcar (compose (if (json-args-p processor)
-                                    #'json:decode-json-from-string
-                                    #'identity)
-                                #'cdr)
-                       (funcall (if (eq :post (http-method fn))
-                                          #'post-parameters*
-                                          #'get-parameters*)
-                                      *request*))))
+         (fn  (gethash fn-name (ajax-functions processor))))
     (unless fn
-      (error "Error in call-lisp-function: no such function: ~A" fn-name))
-    (unless (= (length (arglist (name fn))) (length args))
-      (error "Error in call-lisp-function: wrong number args: ~A ~A" fn-name args))
-    (setf (reply-external-format*) (reply-external-format processor))
-    (setf (content-type*) (get-content-type processor fn))
-    (no-cache)
-    (funcall (if (search "xml" (content-type*))
-                 #'xml-wrapper
-                 #'identity)
-             (apply (name fn) args))))
+      (error "Error in process-ajax-request: no such function: ~S ~S"
+             fn-name
+             (alexandria:hash-table-alist  (ajax-functions processor))))
+    (let ((args (mapcar (compose (if (json-args-p processor)
+                                     #'json:decode-json-from-string
+                                     #'identity)
+                                 #'cdr)
+                        (funcall (if (eq :post (http-method fn))
+                                     #'post-parameters*
+                                     #'get-parameters*)
+                                 *request*))))
+      (unless (= (length (ajax-ps-parameters processor fn)) (length args))
+        (error "Error in process-ajax-request: wrong number args: ~A ~A" fn-name args))
+      (setf (reply-external-format*) (reply-external-format processor))
+      (setf (content-type*) (get-content-type processor fn))
+      (no-cache)
+      (funcall (if (search "xml" (content-type*))
+                   #'xml-wrapper
+                   #'identity)
+               (call-lisp-function processor fn args)))))
+
+(defgeneric call-lisp-function (processor ajax-function arguments))
+(defmethod call-lisp-function ((processor ajax-processor)
+                               (func ajax-function)
+                               arguments)
+  "This calls does the actual call of the ajax-lisp function.  Note:
+   this is separate because it is overridden in the class ajax-pusher."
+  (declare (ignore processor))
+  (apply (name func) arguments))

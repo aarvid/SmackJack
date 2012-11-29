@@ -4,8 +4,10 @@
   :serial t
   :depends-on (#:smackjack
                #:local-time
-               #:cl-who)
+               #:cl-who
+               #:cl-containers)
   :components ((:file "package")
                (:file "demo")
+               (:file "demo-push")
                ))
 

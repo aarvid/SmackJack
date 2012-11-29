@@ -49,14 +49,15 @@
 (defun-ajax say-hi (name) (*ajax-processor* :callback-data :response-xml)
   (concatenate 'string "Hi " name ", nice to meet you."))
 
+
 (defun-ajax say-bye (name) (*ajax-processor* :method :post
                                              :callback-data :response-text)
   (concatenate 'string "Bye " name ", nice meeting you."))
 
+
 (defun-ajax force-error (name) (*ajax-processor* :callback-data :response-xml)
-  (error  "~A, what a lousy name." name)
-;;  "<error> </abigerror>"
-  )
+  (error  "~A, what a lousy name." name))
+
 
 (defun-ajax calc-age-day-of-birth (name birthday-dd birthday-mm birthday-yyyy)
     (*ajax-processor* :method :post :callback-data :json)
@@ -113,7 +114,7 @@
 ;;;;; Finally, we can put everything together and create a page that
 ;;;;; calls our function.  For rendering html, we will use cl-who in
 ;;;;; this example (http://weitz.de/cl-who/). Note that smackjack
-;;;;; can be used with any other template/ rendering system
+;;;;; can be used with any other template/rendering system
 
 (define-easy-handler (main-page :uri "/") ()
   (with-html-output-to-string (*standard-output* nil :prologue t)
