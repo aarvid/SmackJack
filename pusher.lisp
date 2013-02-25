@@ -21,7 +21,12 @@
                        :initform (make-hash-table :test #'equal)
                        :type hash-table
                        :documentation "Maps the symbol names of the remoted functions to
-                                       their ajax-function object")))
+                                       their ajax-function object")
+   (pushes-per-poll    :accessor pusher-pushes-per-poll
+                       :initform 1
+                       :initarg :pushes-per-poll
+                       :type (integer 1)
+                       :documentation "Maximum number of pushes per poll.")))
 
 (defmethod initialize-instance :after ((pusher ajax-pusher) &key)
   (remotify-function pusher (pusher-poll-function-name pusher) :method :post :callback-data :json ))
@@ -46,14 +51,15 @@
 
 
 (defgeneric pushify-function (pusher function-name ps-code
-                              &key remote-name))
+                              &key remote-name default-sessions))
 (defmethod  pushify-function ((pusher ajax-pusher) function-name ps-code
-                              &key remote-name)
+                              &key remote-name (default-sessions :acceptor-sessions))
   (setf (gethash (symbol-name function-name) (pusher-push-functions pusher))
         (make-instance 'push-function
                        :name function-name
                        :ps-code ps-code
-                       :remote-name remote-name)))
+                       :remote-name remote-name
+                       :default-sessions default-sessions)))
 
 (defgeneric push-function-sessions (push-function))
 (defmethod  push-function-sessions ((push-function push-function))
@@ -74,7 +80,10 @@
     (let ((data (list (cons 'function function-name)
                       (cons 'arguments arguments))))
       (dolist (s sessions)
-        (when-let ((q (session-value :smackpush-queue s)))
+        (let ((q (session-value :smackpush-queue s)))
+          (unless q
+            (setf q (setf (session-value :smackpush-queue)
+                          (make-instance 'cl-containers:basic-queue))))
           (cl-containers:enqueue q data))))))
 
 (defmacro defun-push (name lambda-list (processor &rest keys) &body body)
@@ -129,11 +138,12 @@
                     ,@(ps-push-functions processor)
                     (defun poll-callback (response)
                       (when response
-                        (let ((func (@ response function)))
-                          (if (aref push-functions func)
-                              (chain (aref push-functions func)
-                                     (apply nil (@ response arguments)))
-                              (chain console (log (+ "unknown push function: " func))))))
+                       (dolist (psh response)
+                         (let ((func (@ psh function)))
+                           (if (aref push-functions func)
+                               (chain (aref push-functions func)
+                                      (apply nil (@ psh arguments)))
+                               (chain console (log (+ "unknown push function: " func)))))))
                       nil)
                     (defun interval-interrupt ()
                       (chain ,ajax-namespace (,poll-remote-name poll-callback )))
@@ -147,24 +157,25 @@
                     (create start-poll start-poll
                             stop-poll stop-poll)))))))))))
 
-(defun process-push-poll (arguments)
+(defun process-push-poll (pusher arguments)
   (declare (ignore arguments)) ;; future development.
   (unless *session*
-    (start-session)
+    (start-session))
+  (unless (session-value :smackpush-queue)
     (setf (session-value :smackpush-queue)
           (make-instance 'cl-containers:basic-queue)))
   (json:encode-json-to-string
    (let ((q (session-value :smackpush-queue)))
-     (if (cl-containers:empty-p q)
-         nil
-         (cl-containers:dequeue q)))))
+     (loop repeat (pusher-pushes-per-poll pusher)
+           until (cl-containers:empty-p q)
+           collect (cl-containers:dequeue q)))))
 
 (defmethod call-lisp-function ((processor ajax-pusher)
                                (func ajax-function)
                                arguments)
   (if (eq (pusher-poll-function-name processor)
           (name func))
-      (process-push-poll arguments)
+      (process-push-poll processor arguments)
       (call-next-method)))
 
 (defmethod ajax-ps-parameters ((processor ajax-pusher) (ajax-fn ajax-function))
@@ -172,3 +183,8 @@
           (name ajax-fn))
       nil
       (call-next-method)))
+
+(let ((l (iota 5)))
+  (loop repeat 10
+        while (consp l)
+        collect (pop l)))

@@ -356,12 +356,13 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     
 
 
-(defgeneric generate-prologue (processor))
-(defmethod generate-prologue ((processor ajax-processor))
+(defgeneric generate-prologue (processor &key wrapper))
+(defmethod generate-prologue ((processor ajax-processor) &key (wrapper t))
   "Creates a <script> ... </script> html element that contains all the
    client-side javascript code for the ajax communication. Include this 
    script in the <head> </head> of each html page"
-  (html-script-cdata (generate-prologue-javascript processor)))
+  (funcall (if wrapper #'html-script-cdata #'identity)
+           (generate-prologue-javascript processor)))
 
 (defgeneric get-content-type (processor ajax-fn))
 (defmethod get-content-type ((processor ajax-processor) (ajax-fn ajax-function))

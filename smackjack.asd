@@ -2,6 +2,9 @@
 
 (asdf:defsystem #:smackjack
   :serial t
+  :description "a small Ajax framework for hunchentoot using parenscript"
+  :author "Andy Peterson <andy.arvid@gmail.com>"
+  :license "MIT"
   :depends-on (#:alexandria
                #:hunchentoot
                #:cl-json
