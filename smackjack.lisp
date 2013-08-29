@@ -3,7 +3,6 @@
 
 (in-package #:smackjack)
 
-;;; "smackjack" goes here. Hacks and glory await!
 
 (defclass remote-function ()
   ((name :reader name
@@ -15,7 +14,8 @@
     :initarg :remote-name
     :initform nil
     :type symbol
-    :documentation "remote name of the function")))
+    :documentation "remote name of the function"))
+  (:documentation "Base class for remote functions between server and browser"))
 
 (defclass ajax-function (remote-function)
   ((method
@@ -28,93 +28,123 @@
     :accessor callback-data
     :initarg :callback-data
     :initform :response-xml
-    :type '(member :request-object :response-xml :response-text :response-xml-text :json)
-    :documentation "argument passed to callback function from ajax response.  Content-type should correspond.")
+    :type '(member :request-object :response-xml :response-text
+            :response-xml-text :json)
+    :documentation "argument passed to callback function from ajax response.
+                    Content-type should correspond.")
    (content-type
-    :initarg :content-type :type string
+    :initarg :content-type
+    :type string
     :accessor content-type
     :initform "text/xml;"
-    :documentation "The http content type that is sent with each response")))
+    :documentation "The http content type that is sent with each response"))
+  (:documentation "Class for browser functions that call a server-side
+lisp function using ajax"))
 
 (defclass ajax-processor ()
   ((ajax-functions 
-    :accessor ajax-functions :initform (make-hash-table :test #'equal)
+    :accessor ajax-functions
+    :initform (make-hash-table :test #'equal)
     :type hash-table
-    :documentation "Maps the symbol names of the remoted functions to
+    :documentation "Hashtable maps the symbol names of the remoted functions to
                     their ajax-function object")
    (ajax-namespace
-    :initarg :ajax-function-prefix :initform 'smackjack
+    :initarg :ajax-namespace
+    :initform 'smackjack
     :accessor ajax-namespace
     :type symbol
-    :documentation "Create a namespace object for generated javascript code")
+    :documentation "Symbol or nil. Name for a namespace object for generated
+                    javascript code. Nil means no namespace; code will be
+                    global")
    (ajax-functions-namespace-p
-    :initarg :ajax-functions-namespace-p :initform t
+    :initarg :ajax-functions-namespace-p
+    :initform t
     :accessor ajax-functions-namespace-p
     :type boolean
-    :documentation "Place javascript functions corresponding
-                    to lisp functions in the ajax-namespace")   
-   (ajax-function-prefix
-    :initarg :ajax-function-prefix :initform nil
+    :documentation "Boolean. Place javascript functions corresponding
+                    to lisp functions in the ajax-namespace. Default t.")   
+   (ajax-function-prefixn
+    :initarg :ajax-function-prefix
+    :initform nil
     :accessor ajax-function-prefix
     :type symbol
-    :documentation "Prefix for javascript functions corresponding
-                    to lisp functions")
+    :documentation "Symbol. Prefix for javascript functions corresponding
+                    to lisp functions. Default is nil for no prefix.")
    
    (ht-simple-ajax-symbols-p  ;; should be removed in the future.
     :initarg :ht-simple-ajax-symbols-p
     :accessor ht-simple-ajax-symbols-p
     :initform nil
     :type boolean
-    :documentation "use ht-simple-ajax symbol processor to generate
+    :documentation "Boolean. use ht-simple-ajax symbol processor to generate
                     compatible ht-simple-ajax compatible code")
    (json-args-p  ;; should be removed in the future.
     :initarg :json-args-p
     :accessor json-args-p
     :initform t
     :type boolean
-    :documentation "ajax function arguments are passed using json")
+    :documentation "Boolean. Ajax function arguments are passed using json")
    (server-uri 
-    :initarg :server-uri :initform "/ajax" :accessor server-uri
+    :initarg :server-uri
+    :initform "/ajax"
+    :accessor server-uri
     :type string
-    :documentation "The uri which is used to handle ajax request")
+    :documentation "String. The uri which is used to handle ajax request")
    (default-content-type
-    :initarg :default-content-type :type string
+    :initarg :default-content-type
+    :type string
     :accessor default-content-type
     :initform "text/xml; charset=\"utf-8\""
-    :documentation "The http content type that is sent with each response")
+    :documentation "String. The http content type that is sent with each response")
    (reply-external-format 
-    :initarg :reply-external-format :type flexi-streams::external-format
-    :accessor reply-external-format :initform hunchentoot::+utf-8+
-    :documentation "The format for the character output stream")))
+    :initarg :reply-external-format
+    :type flexi-streams::external-format
+    :accessor reply-external-format
+    :initform hunchentoot::+utf-8+
+    :documentation "The format for the character output stream"))
+  (:documentation "The principal and controlling class of this
+library. The programmer will instantiate this class, define the ajax
+functions of the class and link the dispatcher to hunchentoot's
+dispatcher. This processor will also generate javascript code that can
+be loaded to the browser."))
 
 (defclass ht-simple-ajax-processor (ajax-processor)
   ((ajax-namespace :initform nil)
    (ajax-functions-namespace-p :initform nil)
    (ajax-function-prefix :initform 'ajax)
    (ht-simple-ajax-symbols-p :initform t)
-   (json-args-p :initform nil)))
+   (json-args-p :initform nil))
+  (:documentation "A sub-class designed to be compatible with ht-simple-ajax"))
 
-(defgeneric create-ajax-dispatcher (processor))
+(defgeneric create-ajax-dispatcher (processor)
+  (:documentation "Creates a hunchentoot dispatcher for an ajax processor.
+One possible usage:
+  (push (create-ajax-dispatcher your-ajax-processor)
+        hunchentoot:*dispatch-table*)"))
 (defmethod create-ajax-dispatcher ((processor ajax-processor))
-  "Creates a hunchentoot dispatcher for an ajax processor"
   (create-prefix-dispatcher (server-uri processor)
                             #'(lambda () (process-ajax-request processor))))
 
 
-(defun make-js-symbol (symbol)
-  "helper function for making 'foo_bar_' out of 'foo-bar?' "
-  (loop with string = (string-downcase symbol)
+
+(defun make-simple-js-symbol (symbol)
+  "this functions generates converts lisps symbols to format used
+   by ht-simple-ajax and will be transformed by parenscript so that.
+   they are compatibile with ht-simple-ajax.
+   helper function for making 'foo_bar_ out of 'foo-bar? "
+  (symbolicate
+   (string-upcase
+    (loop with string = (string-downcase symbol)
      for c across "?-<>"
      do (setf string (substitute #\_ c string))
-     finally (return string)))
-
-(defun make-ps-symbol (symbol)
-  (symbolicate (string-upcase (make-js-symbol symbol))))
+     finally (return string)))))
 
 
 
 (defgeneric remotify-function (processor function-name
-                               &key method remote-name content-type callback-data))
+                               &key method remote-name content-type callback-data)
+  (:documentation "Creates a remote ajax-function identified by its symbol and symbol-name
+   and attaches it to the ajax-processor"))
 (defmethod  remotify-function ((processor ajax-processor) function-name
                                &key (method :get) remote-name content-type callback-data)
   (setf (gethash (symbol-name function-name) (ajax-functions processor))
@@ -125,45 +155,53 @@
                        :content-type content-type
                        :callback-data callback-data)))
 
-(defgeneric un-remotify-function (processor function-name))
+(defgeneric un-remotify-function (processor function-name)
+  (:documentation "remove a remote function identified by its symbol or
+name from the ajax-processor"))
 
 (defmethod un-remotify-function ((processor ajax-processor) symbol-or-name)
   (let ((func-name (if (symbolp symbol-or-name)
                        (symbol-name symbol-or-name)
                        symbol-or-name)))
     (unless (and func-name (stringp func-name))
-      (error "Invalid name ~S in UNEXPORT-FUNC" symbol-or-name))
+      (error "Invalid name ~S in UN-REMOTIFY-FUNCTION" symbol-or-name))
     (remhash (string-upcase func-name) (ajax-functions processor))))
 
 
 (defmacro defun-ajax (name lambda-list (processor &rest remote-keys) &body body)
-  "Declares a defun that can be called from a client page.
+  "Macro to defun a server-side function that can be called from a client page.
 Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
    (do-stuff))"
   `(progn
      (defun ,name ,lambda-list ,@body)
      (remotify-function ,processor ',name ,@remote-keys)))
 
-(defgeneric ajax-function-name (processor ajax-fn))
+(defgeneric ajax-function-name (processor ajax-fn)
+  (:documentation "returns a string for the remote function name
+before parenscript processing"))
 (defmethod ajax-function-name ((processor ajax-processor)
                                (ajax-fn remote-function))
   (let ((compat (ht-simple-ajax-symbols-p processor))
         (prefix (ajax-function-prefix processor))
         (name   (or (remote-name ajax-fn)
                     (name ajax-fn))))
-    (funcall (if compat #'make-ps-symbol #'identity)
+    (funcall (if compat #'make-simple-js-symbol #'identity)
              (if prefix
                  (symbolicate prefix '- name)
                  name))))
 
-(defgeneric ajax-ps-parameters (processor ajax-fn))
+(defgeneric ajax-ps-parameters (processor ajax-fn)
+  (:documentation "returns a list of the arguments of the ajax-function
+ready for parenscript processing."))
 (defmethod ajax-ps-parameters ((processor ajax-processor) (ajax-fn ajax-function))
   (mapcar (if (ht-simple-ajax-symbols-p processor)
-              #'make-ps-symbol
+              #'make-simple-js-symbol
               #'identity)
           (arglist (name ajax-fn))))
 
-(defgeneric ajax-ps-function (processor ajax-fn))
+(defgeneric ajax-ps-function (processor ajax-fn)
+  (:documentation "returns parenscript code to define a function on the
+client that will call the corresponding server-side lisp function via ajax."))
 (defmethod ajax-ps-function ((processor ajax-processor) (ajax-fn ajax-function))
   (let* ((namespace (ajax-namespace processor))
          (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
@@ -182,6 +220,7 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                    ,(ajax-response-process ajax-fn)))))
 
 (defun ps-http-request ()
+  "returns parenscript (client) code to set up ajax request."
   '(progn
     (defvar http-factory nil)
     (defvar http-factories
@@ -210,7 +249,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                   (http-factory))
                 request))))))
 
-(defgeneric ps-ajax-response-processes (processor))
+(defgeneric ps-ajax-response-processes (processor)
+  (:documentation "returns client parenscript code to define functions to
+handle the various types of ajax responses"))
 (defmethod ps-ajax-response-processes ((processor ajax-processor))
   (declare (ignore processor))
   '(progn
@@ -230,7 +271,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     (defun response-json (request)
       (funcall (@ *json* parse) (@ request response-text)))))
 
-(defgeneric ajax-response-process (ajax-fn))
+(defgeneric ajax-response-process (ajax-fn)
+  (:documentation "returns the symbol of the parenscript function that will
+handle the ajax response of the ajax-function"))
 (defmethod ajax-response-process ((ajax-fn ajax-function))
   (case (callback-data ajax-fn)
     (:request-object 'identity)
@@ -241,7 +284,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     (otherwise 'identity)))
        
   
-(defgeneric ps-fetch-uri (processor))
+(defgeneric ps-fetch-uri (processor)
+  (:documentation "Return parenscript code to define client-side fetch-uri
+which initiates ajax request and sets up callback/error treatment."))
 (defmethod ps-fetch-uri ((processor ajax-processor))
   (declare (ignore processor))
   '(defun fetch-uri (uri callback &optional (method "GET") (body nil) error-handler process)
@@ -269,7 +314,9 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
         (funcall send body))
       nil)))
 
-(defgeneric ps-encode-args (processor))
+(defgeneric ps-encode-args (processor)
+  (:documentation "returns parenscript code to define a client-side function that
+encodes the arguments to be passed along with an ajax/http request."))
 (defmethod ps-encode-args ((processor ajax-processor))
   `(defun ajax-encode-args (args)
      (let ((s ""))
@@ -282,8 +329,11 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
                           '(chain *json* (stringify (aref args i)))
                           '(aref args i)))))))))
 
-(defgeneric ps-ajax-call (processor))
-(defmethod ps-ajax-call ((processor ajax-processor))  
+(defgeneric ps-ajax-call (processor)
+  (:documentation "returns parenscript code to define a client-side function
+for the ajax-processor that initiates an ajax call of a server-side lisp
+function "))
+(defmethod ps-ajax-call ((processor ajax-processor))
   `(defun ajax-call (func args &optional (method "GET") callback error-handler process)
      (let ((uri (+ ,(server-uri processor) "/"
                    (encode-u-r-i-component func) "/"))
@@ -299,7 +349,10 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
 
 
 
-(defgeneric generate-prologue-javascript (processor))
+(defgeneric generate-prologue-javascript (processor)
+  (:documentation "generates a string of raw javascript code that needs to be
+loaded on the client side for the ajax-processor to function correctly.
+This code can be embedded in a file, a virtual file, or generated html."))
 (defmethod generate-prologue-javascript ((processor ajax-processor))
   (let* ((namespace (ajax-namespace processor))
          (ajax-fns-in-ns (and namespace (ajax-functions-namespace-p processor)))
@@ -356,15 +409,23 @@ Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
     
 
 
-(defgeneric generate-prologue (processor &key wrapper))
+(defgeneric generate-prologue (processor &key wrapper)
+  (:documentation   "Creates a string that contains all the client-side
+javascript code for the ajax communication. Optionally include
+<script> ... </script> html element wrapper.  If including the wrapper,
+include this script in the <head> </head> of each html page.
+Without the wrapper, a virtual file can be done like:
+ (define-easy-handler (js-ajax-code :uri \"/ajax-code.js\") ()
+   (when (boundp 'hunchentoot:*request*)
+     (setf (content-type*) \"text/javascript\"))
+  (generate-prologue *ajax-processor* :wrapper nil))"))
+
 (defmethod generate-prologue ((processor ajax-processor) &key (wrapper t))
-  "Creates a <script> ... </script> html element that contains all the
-   client-side javascript code for the ajax communication. Include this 
-   script in the <head> </head> of each html page"
   (funcall (if wrapper #'html-script-cdata #'identity)
            (generate-prologue-javascript processor)))
 
-(defgeneric get-content-type (processor ajax-fn))
+(defgeneric get-content-type (processor ajax-fn)
+  (:documentation "return the content type string for ajax-function response."))
 (defmethod get-content-type ((processor ajax-processor) (ajax-fn ajax-function))
   (case (callback-data ajax-fn)
     ((:response-xml :response-xml-text) "text/xml")
@@ -416,6 +477,7 @@ for STRING which'll just be returned."
 
 
 (defun xml-wrapper (string)
+  "wrapper for xml ajax response"
    (concatenate 'string
                  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                  (string #\newline)
@@ -423,11 +485,12 @@ for STRING which'll just be returned."
                  (escape-string string)
                  "</response>"))
 
-(defgeneric process-ajax-request (processor))
+(defgeneric process-ajax-request (processor)
+  (:documentation "This should called on each ajax request. That is the
+ajax uri is identified and dispatched by hunchentoot.  See
+CREATE-AJAX-DISPATCHER. It  parses the parameters from the http request, calls
+the lisp function and returns the response."))
 (defmethod process-ajax-request ((processor ajax-processor))
-  "This is called from hunchentoot on each ajax request. It parses the 
-   parameters from the http request, calls the lisp function and returns
-   the response."
   (let* ((fn-name (string-trim "/" (subseq (script-name* *request*)
                                            (length (server-uri processor)))))
          (fn  (gethash fn-name (ajax-functions processor))))
@@ -453,11 +516,11 @@ for STRING which'll just be returned."
                    #'identity)
                (call-lisp-function processor fn args)))))
 
-(defgeneric call-lisp-function (processor ajax-function arguments))
+(defgeneric call-lisp-function (processor ajax-function arguments)
+  (:documentation "This calls does the actual call of the ajax-lisp function.
+Note: this is separate because it is overridden in the class ajax-pusher."))
 (defmethod call-lisp-function ((processor ajax-processor)
                                (func ajax-function)
                                arguments)
-  "This calls does the actual call of the ajax-lisp function.  Note:
-   this is separate because it is overridden in the class ajax-pusher."
   (declare (ignore processor))
   (apply (name func) arguments))

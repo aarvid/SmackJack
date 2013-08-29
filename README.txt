@@ -33,4 +33,4 @@ The code also contains a "pusher" subclass.  This allows a lisp
 function call indirectly a javascript function defined in your lisp
 code by parenscript but runs in the browser.  Basically the opposite
 of SmackJack.  This is achieved by adding a simple polling mechanism.
-Future development may include long polling
+Future development may include long polling.
