@@ -1,0 +1,624 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html> 
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <title>SMACKJACK - An Ajax Framework Library</title>
+  <style type="text/css">
+  pre { padding:5px; background-color:#e0e0e0 }
+  h3, h4 { text-decoration: underline; }
+  a { text-decoration: none; padding: 1px 2px 1px 2px; }
+  a:visited { text-decoration: none; padding: 1px 2px 1px 2px; }
+  a:hover { text-decoration: none; padding: 1px 1px 1px 1px; border: 1px solid #000000; } 
+  a:focus { text-decoration: none; padding: 1px 2px 1px 2px; border: none; }
+  a.none { text-decoration: none; padding: 0; }
+  a.none:visited { text-decoration: none; padding: 0; } 
+  a.none:hover { text-decoration: none; border: none; padding: 0; } 
+  a.none:focus { text-decoration: none; border: none; padding: 0; } 
+  a.noborder { text-decoration: none; padding: 0; } 
+  a.noborder:visited { text-decoration: none; padding: 0; } 
+  a.noborder:hover { text-decoration: none; border: none; padding: 0; } 
+  a.noborder:focus { text-decoration: none; border: none; padding: 0; }  
+  pre.none { padding:5px; background-color:#ffffff }
+  </style>
+</head>
+
+<body bgcolor=white>
+
+<h2> SMACKJACK - An Ajax Framework Library</h2>
+
+<blockquote>
+<br>&nbsp;<br><h3><a name=abstract class=none>Abstract</a></h3>
+
+<p>
+Smackjack is a small Ajax framework written in Common Lisp.  Basically
+Smackjack allows browser code call lisp functions via ajax and get a
+return value.
+</p>
+<p>
+Currently runs under Hunchentoot web server but there are plans
+to allow other web servers. It was a fork of ht-simple-ajax and
+inspires to be a replacement to the unmaintained and out of date
+ht-ajax.
+</p>
+<p>
+Differently than those two libraries, this one depends on parenscript
+to generate client-side javascript and allows greater flexibility in
+generated javascript.
+</p>
+<p>
+Current version is compatible with ht-simple-ajax but it lacks many
+features of ht-ajax.
+</p>
+<p>
+The following features are addition to those available in ht-simple-ajax:
+</p>
+<ul>
+<li> AJAX via Post as well as Get </li>
+
+<li> response can be text, xml or json. </li>
+
+<li> optional javascript namespaces to encapsulate generated javascript 
+functions.</li>
+  
+<li> The arguments of the functions can be treated by cl-json before
+    calling the function.</li>
+</ul>
+
+<p>
+The code also contains a "pusher" subclass.  This allows a lisp
+function call indirectly a javascript function defined in your lisp
+code by parenscript but runs in the browser.  Basically the opposite
+of SmackJack.  This is achieved by adding a simple polling mechanism.
+Future development may include long polling.
+</p>
+<p>
+The code comes with
+a <a
+href="http://www.opensource.org/licenses/mit-license.php">MIT-style
+license</a> so you can basically do with it whatever you want.
+</p>
+<p>
+<font color=red>Source Code shortcut:</font> <a href="https://github.com/aarvid/SmackJack">https://github.com/aarvid/SmackJack</a>.
+</blockquote>
+
+<br>&nbsp;<br><h3><a class=none name="contents">Contents</a></h3>
+<ol>
+  <li><a href="#download">Download</a>
+  <li><a href="#dictionary">The SMACKJACK dictionary</a>
+    <ol>
+      <li><a href="#ajax-function-prefix"><code>ajax-function-prefix</code></a>
+      <li><a href="#ajax-functions-namespace-p"><code>ajax-functions-namespace-p</code></a>
+      <li><a href="#ajax-namespace"><code>ajax-namespace</code></a>
+      <li><a href="#ajax-processor"><code>ajax-processor</code></a>
+      <li><a href="#ajax-pusher"><code>ajax-pusher</code></a>
+      <li><a href="#create-ajax-dispatcher"><code>create-ajax-dispatcher</code></a>
+      <li><a href="#default-content-type"><code>default-content-type</code></a>
+      <li><a href="#defun-ajax"><code>defun-ajax</code></a>
+      <li><a href="#defun-push"><code>defun-push</code></a>
+      <li><a href="#generate-prologue"><code>generate-prologue</code></a>
+      <li><a href="#ht-simple-ajax-processor"><code>ht-simple-ajax-processor</code></a>
+      <li><a href="#ht-simple-ajax-symbols-p"><code>ht-simple-ajax-symbols-p</code></a>
+      <li><a href="#json-args-p"><code>json-args-p</code></a>
+      <li><a href="#pusher-poll-function-name"><code>pusher-poll-function-name</code></a>
+      <li><a href="#pusher-poll-interval"><code>pusher-poll-interval</code></a>
+      <li><a href="#pusher-poll-namespace"><code>pusher-poll-namespace</code></a>
+      <li><a href="#pusher-pushes-per-poll"><code>pusher-pushes-per-poll</code></a>
+      <li><a href="#reply-external-format"><code>reply-external-format</code></a>
+      <li><a href="#server-uri"><code>server-uri</code></a>
+    </ol>
+  <li><a href="#ack">Acknowledgements</a>
+</ol>
+
+<br>&nbsp;<br><h3><a class=none name="download">Download</a></h3>
+
+SMACKJACK together with this documentation can be downloaded from <a
+href="https://github.com/aarvid/SmackJack">https://github.com/aarvid/SmackJack</a>. The
+current version is 0.1.0.
+
+<br>&nbsp;<br><h3><a class=none name="dictionary">The SMACKJACK dictionary</a></h3>
+
+
+
+<!-- Entry for AJAX-FUNCTION-PREFIX -->
+
+<p><br>[Generic accessor]<br><a class=none name='ajax-function-prefix'><b>ajax-function-prefix</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-function-prefix</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for AJAX-FUNCTION-PREFIX -->
+
+
+<!-- Entry for AJAX-FUNCTION-PREFIX -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>ajax-function-prefix</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-function-prefix</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Symbol. Prefix for javascript functions corresponding
+                    to lisp functions. Default is nil for no prefix.
+
+</blockquote>
+
+<!-- End of entry for AJAX-FUNCTION-PREFIX -->
+
+
+<!-- Entry for AJAX-FUNCTIONS-NAMESPACE-P -->
+
+<p><br>[Generic accessor]<br><a class=none name='ajax-functions-namespace-p'><b>ajax-functions-namespace-p</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-functions-namespace-p</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for AJAX-FUNCTIONS-NAMESPACE-P -->
+
+
+<!-- Entry for AJAX-FUNCTIONS-NAMESPACE-P -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>ajax-functions-namespace-p</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-functions-namespace-p</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Boolean. Place javascript functions corresponding
+                    to lisp functions in the ajax-namespace. Default t.
+
+</blockquote>
+
+<!-- End of entry for AJAX-FUNCTIONS-NAMESPACE-P -->
+
+
+<!-- Entry for AJAX-NAMESPACE -->
+
+<p><br>[Generic accessor]<br><a class=none name='ajax-namespace'><b>ajax-namespace</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-namespace</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for AJAX-NAMESPACE -->
+
+
+<!-- Entry for AJAX-NAMESPACE -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>ajax-namespace</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ajax-namespace</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Symbol or nil. Name for a namespace object for generated
+                    javascript code. Nil means no namespace; code will be
+                    global
+
+</blockquote>
+
+<!-- End of entry for AJAX-NAMESPACE -->
+
+
+<!-- Entry for AJAX-PROCESSOR -->
+
+<p><br>[Standard class]<br><a class=none name='ajax-processor'><b>ajax-processor</b></a>
+<blockquote><br>
+
+The principal and controlling class of this
+library. The programmer will instantiate this class, define the ajax
+functions of the class and link the dispatcher to hunchentoot&#039;s
+dispatcher. This processor will also generate javascript code that can
+be loaded to the browser.
+
+</blockquote>
+
+<!-- End of entry for AJAX-PROCESSOR -->
+
+
+<!-- Entry for AJAX-PUSHER -->
+
+<p><br>[Standard class]<br><a class=none name='ajax-pusher'><b>ajax-pusher</b></a>
+<blockquote><br>
+
+The class adds pushing capabilities to ajax-processor.
+The server can push function calls to the client. That is the lisp server
+code calls a function with arguments that will cause a corresponding
+function call on the client side.
+
+</blockquote>
+
+<!-- End of entry for AJAX-PUSHER -->
+
+
+<!-- Entry for CREATE-AJAX-DISPATCHER -->
+
+<p><br>[Generic function]<br><a class=none name='create-ajax-dispatcher'><b>create-ajax-dispatcher</b> <i>processor</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Creates a hunchentoot dispatcher for an ajax processor.
+One possible usage:
+  (push (create-ajax-dispatcher your-ajax-processor)
+        hunchentoot:*dispatch-table*)
+
+</blockquote>
+
+<!-- End of entry for CREATE-AJAX-DISPATCHER -->
+
+
+<!-- Entry for CREATE-AJAX-DISPATCHER -->
+
+<p><br>[Method]<br><a class=none><b>create-ajax-dispatcher</b> <i>(processor ajax-processor)</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for CREATE-AJAX-DISPATCHER -->
+
+
+<!-- Entry for DEFAULT-CONTENT-TYPE -->
+
+<p><br>[Generic accessor]<br><a class=none name='default-content-type'><b>default-content-type</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>default-content-type</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for DEFAULT-CONTENT-TYPE -->
+
+
+<!-- Entry for DEFAULT-CONTENT-TYPE -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>default-content-type</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>default-content-type</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+String. The http content type that is sent with each response
+
+</blockquote>
+
+<!-- End of entry for DEFAULT-CONTENT-TYPE -->
+
+
+<!-- Entry for DEFUN-AJAX -->
+
+<p><br>[Macro]<br><a class=none name='defun-ajax'><b>defun-ajax</b> <i>name lambda-list (processor <tt>&amp;rest</tt> remote-keys) declaration* statement*</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Macro to defun a server-side function that can be called from a client page.
+Example: (defun-ajax func1 (arg1 arg2) (*ajax-processor*)
+   (do-stuff))
+
+</blockquote>
+
+<!-- End of entry for DEFUN-AJAX -->
+
+
+<!-- Entry for DEFUN-PUSH -->
+
+<p><br>[Macro]<br><a class=none name='defun-push'><b>defun-push</b> <i>name lambda-list (processor <tt>&amp;rest</tt> keys) declaration* statement*</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+declares and defines a &#039;push&#039; function that when called in lisp causes
+   the correponding javascript function to be called in the client page.
+   the body should be parenscript code to be compiled into javascript 
+
+</blockquote>
+
+<!-- End of entry for DEFUN-PUSH -->
+
+
+<!-- Entry for GENERATE-PROLOGUE -->
+
+<p><br>[Generic function]<br><a class=none name='generate-prologue'><b>generate-prologue</b> <i>processor <tt>&amp;key</tt> wrapper wrapper</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+Creates a string that contains all the client-side
+javascript code for the ajax communication. Optionally include
+&lt;script&gt; ... &lt;/script&gt; html element wrapper.  If including the wrapper,
+include this script in the &lt;head&gt; &lt;/head&gt; of each html page.
+Without the wrapper, a virtual file can be done like:
+ (define-easy-handler (js-ajax-code :uri &quot;/ajax-code.js&quot;) ()
+   (when (boundp &#039;hunchentoot:*request*)
+     (setf (content-type*) &quot;text/javascript&quot;))
+  (generate-prologue *ajax-processor* :wrapper nil))
+
+</blockquote>
+
+<!-- End of entry for GENERATE-PROLOGUE -->
+
+
+<!-- Entry for GENERATE-PROLOGUE -->
+
+<p><br>[Method]<br><a class=none><b>generate-prologue</b> <i>(processor ajax-processor) <tt>&amp;key</tt> wrapper wrapper</i> =&gt; <i>result</i></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for GENERATE-PROLOGUE -->
+
+
+<!-- Entry for HT-SIMPLE-AJAX-PROCESSOR -->
+
+<p><br>[Standard class]<br><a class=none name='ht-simple-ajax-processor'><b>ht-simple-ajax-processor</b></a>
+<blockquote><br>
+
+A sub-class designed to be compatible with ht-simple-ajax
+
+</blockquote>
+
+<!-- End of entry for HT-SIMPLE-AJAX-PROCESSOR -->
+
+
+<!-- Entry for HT-SIMPLE-AJAX-SYMBOLS-P -->
+
+<p><br>[Generic accessor]<br><a class=none name='ht-simple-ajax-symbols-p'><b>ht-simple-ajax-symbols-p</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ht-simple-ajax-symbols-p</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for HT-SIMPLE-AJAX-SYMBOLS-P -->
+
+
+<!-- Entry for HT-SIMPLE-AJAX-SYMBOLS-P -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>ht-simple-ajax-symbols-p</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>ht-simple-ajax-symbols-p</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Boolean. use ht-simple-ajax symbol processor to generate
+                    compatible ht-simple-ajax compatible code
+
+</blockquote>
+
+<!-- End of entry for HT-SIMPLE-AJAX-SYMBOLS-P -->
+
+
+<!-- Entry for JSON-ARGS-P -->
+
+<p><br>[Generic accessor]<br><a class=none name='json-args-p'><b>json-args-p</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>json-args-p</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for JSON-ARGS-P -->
+
+
+<!-- Entry for JSON-ARGS-P -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>json-args-p</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>json-args-p</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Boolean. Ajax function arguments are passed using json
+
+</blockquote>
+
+<!-- End of entry for JSON-ARGS-P -->
+
+
+<!-- Entry for PUSHER-POLL-FUNCTION-NAME -->
+
+<p><br>[Generic accessor]<br><a class=none name='pusher-poll-function-name'><b>pusher-poll-function-name</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-function-name</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-FUNCTION-NAME -->
+
+
+<!-- Entry for PUSHER-POLL-FUNCTION-NAME -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>pusher-poll-function-name</b> <i>(object ajax-pusher)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-function-name</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a><tt> :after</tt>
+<blockquote><br>
+
+Name of the smackjack function called
+on the client side when polling for pushes.  Note: this name is a tag.  The
+function does not actually exist on the server.
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-FUNCTION-NAME -->
+
+
+<!-- Entry for PUSHER-POLL-INTERVAL -->
+
+<p><br>[Generic accessor]<br><a class=none name='pusher-poll-interval'><b>pusher-poll-interval</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-interval</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-INTERVAL -->
+
+
+<!-- Entry for PUSHER-POLL-INTERVAL -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>pusher-poll-interval</b> <i>(object ajax-pusher)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-interval</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+The number of milliseconds between
+polls of the server for push calls.
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-INTERVAL -->
+
+
+<!-- Entry for PUSHER-POLL-NAMESPACE -->
+
+<p><br>[Generic accessor]<br><a class=none name='pusher-poll-namespace'><b>pusher-poll-namespace</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-namespace</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-NAMESPACE -->
+
+
+<!-- Entry for PUSHER-POLL-NAMESPACE -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>pusher-poll-namespace</b> <i>(object ajax-pusher)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-poll-namespace</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+javascript namespace (i.e. object) to hold the polling
+code and the defined push functions
+
+</blockquote>
+
+<!-- End of entry for PUSHER-POLL-NAMESPACE -->
+
+
+<!-- Entry for PUSHER-PUSHES-PER-POLL -->
+
+<p><br>[Generic accessor]<br><a class=none name='pusher-pushes-per-poll'><b>pusher-pushes-per-poll</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-pushes-per-poll</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for PUSHER-PUSHES-PER-POLL -->
+
+
+<!-- Entry for PUSHER-PUSHES-PER-POLL -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>pusher-pushes-per-poll</b> <i>(object ajax-pusher)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>pusher-pushes-per-poll</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Maximum number of pushes per poll.
+
+</blockquote>
+
+<!-- End of entry for PUSHER-PUSHES-PER-POLL -->
+
+
+<!-- Entry for REPLY-EXTERNAL-FORMAT -->
+
+<p><br>[Generic accessor]<br><a class=none name='reply-external-format'><b>reply-external-format</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>reply-external-format</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for REPLY-EXTERNAL-FORMAT -->
+
+
+<!-- Entry for REPLY-EXTERNAL-FORMAT -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>reply-external-format</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>reply-external-format</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+The format for the character output stream
+
+</blockquote>
+
+<!-- End of entry for REPLY-EXTERNAL-FORMAT -->
+
+
+<!-- Entry for REPLY-EXTERNAL-FORMAT -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>reply-external-format</b> <i>(object reply)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>reply-external-format</b> <i>(object reply)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+The external format of the reply -
+used for character output.
+
+</blockquote>
+
+<!-- End of entry for REPLY-EXTERNAL-FORMAT -->
+
+
+<!-- Entry for SERVER-URI -->
+
+<p><br>[Generic accessor]<br><a class=none name='server-uri'><b>server-uri</b> <i>object</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>server-uri</b> <i>object</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for SERVER-URI -->
+
+
+<!-- Entry for SERVER-URI -->
+
+<p><br>[Specialized accessor]<br><a class=none><b>server-uri</b> <i>(object ajax-processor)</i> =&gt; <i>result</i></a>
+<br><a class=none><tt>(setf (</tt><b>server-uri</b> <i>(object ajax-processor)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+String. The uri which is used to handle ajax request
+
+</blockquote>
+
+<!-- End of entry for SERVER-URI -->
+
+
+<!-- Entry for (SETF PUSHER-POLL-FUNCTION-NAME) -->
+
+<p><br>[Method]<br><a class=none><tt>(setf (</tt><b>pusher-poll-function-name</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a><tt> :before</tt>
+<blockquote><br>
+
+
+
+</blockquote>
+
+<!-- End of entry for (SETF PUSHER-POLL-FUNCTION-NAME) -->
+
+
+<!-- Entry for (SETF PUSHER-POLL-FUNCTION-NAME) -->
+
+<p><br>[Method]<br><a class=none><tt>(setf (</tt><b>pusher-poll-function-name</b> <i>(object ajax-pusher)</i><tt>)</tt> <i>new-value</i><tt>)</tt></a>
+<blockquote><br>
+
+Name of the smackjack function called
+on the client side when polling for pushes.  Note: this name is a tag.  The
+function does not actually exist on the server.
+
+</blockquote>
+
+<!-- End of entry for (SETF PUSHER-POLL-FUNCTION-NAME) -->
+
+
+<br>&nbsp;<br><h3><a class=none name="ack">Acknowledgements</a></h3>
+
+<p>
+This documentation was prepared with <a href="http://weitz.de/documentation-template/">DOCUMENTATION-TEMPLATE</a>.
+</p>
+<p>
+$Header: /usr/local/cvsrep/documentation-template/output.lisp,v 1.18 2013-01-11 13:45:29 edi Exp $
+<p><a href="http://weitz.de/index.html">BACK TO MY HOMEPAGE</a>
+
+</body>
+</html>
