@@ -39,8 +39,8 @@
                               #+abcl
                               "abcl"
 
-                              #+clozure-common-lisp
-                              "clozure-cl"
+                             ;; #+clozure-common-lisp
+                             ;; "clozure-cl"
 
                               #+ccl
                               "ccl"

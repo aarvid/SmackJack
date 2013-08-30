@@ -34,7 +34,7 @@
                     Content-type should correspond.")
    (content-type
     :initarg :content-type
-    :type string
+    :type (or null string)
     :accessor content-type
     :initform "text/xml;"
     :documentation "The http content type that is sent with each response"))

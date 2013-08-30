@@ -77,12 +77,15 @@
 
 ;;;;; Next, we setup and start a hunchentoot web server:
 (defparameter *my-server* 
-  (start (make-instance 'easy-acceptor :address "localhost" :port 8000)))
+  (start (make-instance 'easy-acceptor
+                        :name 'my-server
+                        :address "localhost"
+                        :port 8000)))
 
 
 ;;;;; We add our ajax processor to the hunchentoot dispatch table
-(setq *dispatch-table* (list 'dispatch-easy-handlers 
-                             (create-ajax-dispatcher *ajax-processor*)))
+(push (create-ajax-dispatcher *ajax-pusher*) *dispatch-table*)
+
 
 
 ;;;;; Now we can already call the function from a http client:
@@ -116,7 +119,8 @@
 ;;;;; this example (http://weitz.de/cl-who/). Note that smackjack
 ;;;;; can be used with any other template/rendering system
 
-(define-easy-handler (main-page :uri "/") ()
+(define-easy-handler (main-page :uri "/"
+                                :acceptor-names (list 'my-server)) ()
   (with-html-output-to-string (*standard-output* nil :prologue t)
     (:html :xmlns "http://www.w3.org/1999/xhtml"
      (:head
