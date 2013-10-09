@@ -2,7 +2,8 @@ This is the stub README.txt for the "smackjack" project.
 
 Smackjack is a small Ajax framework written in Common Lisp.  Basically
 Smackjack allows browser code call lisp functions via ajax and get a
-return value.
+return value. The code can be downloaded with all its dependencies
+and loaded by quicklisp (10/2013).
 
 Currently runs under Hunchentoot web server but there are plans
 to allow other web servers. It was a fork of ht-simple-ajax and
