@@ -10,7 +10,8 @@
                #:hunchentoot
                #:cl-json
                #:parenscript
-               #:cl-containers)
+               #:cl-containers
+               #+sbcl :sb-introspect)
   :components ((:file "package")
                (:file "smackjack")
                (:file "pusher")
