@@ -84,7 +84,7 @@
 
 
 ;;;;; We add our ajax processor to the hunchentoot dispatch table
-(push (create-ajax-dispatcher *ajax-pusher*) *dispatch-table*)
+(push (create-ajax-dispatcher *ajax-processor*) *dispatch-table*)
 
 
 
