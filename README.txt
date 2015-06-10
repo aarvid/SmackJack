@@ -7,7 +7,7 @@ and loaded by quicklisp (10/2013).
 
 Currently runs under Hunchentoot web server but there are plans
 to allow other web servers. It was a fork of ht-simple-ajax and
-inspires to be a replacement to the unmaintained and out of date
+aspires to be a replacement to the unmaintained and out of date
 ht-ajax.
 
 Differently than those two libraries, this one depends on parenscript
