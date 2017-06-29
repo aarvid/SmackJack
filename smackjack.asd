@@ -1,17 +1,17 @@
 ;;;; smackjack.asd
 
-(asdf:defsystem #:smackjack
+(asdf:defsystem "smackjack"
   :serial t
   :version "0.1"
   :description "A small Ajax framework for hunchentoot using parenscript"
   :author "Andy Peterson <andy.arvid@gmail.com>"
   :license "MIT"
-  :depends-on (#:alexandria
-               #:hunchentoot
-               #:cl-json
-               #:parenscript
-               #:cl-containers
-               #+sbcl :sb-introspect)
+  :depends-on ("alexandria"
+               "hunchentoot"
+               "cl-json"
+               "parenscript"
+               "cl-containers"
+               #+sbcl "sb-introspect")
   :components ((:file "package")
                (:file "smackjack")
                (:file "pusher")

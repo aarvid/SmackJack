@@ -100,7 +100,7 @@ lisp function using ajax"))
     :initarg :reply-external-format
     :type flexi-streams::external-format
     :accessor reply-external-format
-    :initform hunchentoot::+utf-8+
+    :initform hunchentoot::+utf-8+  ;;HT
     :documentation "The format for the character output stream"))
   (:documentation "The principal and controlling class of this
 library. The programmer will instantiate this class, define the ajax
@@ -121,7 +121,7 @@ be loaded to the browser."))
 One possible usage:
   (push (create-ajax-dispatcher your-ajax-processor)
         hunchentoot:*dispatch-table*)"))
-(defmethod create-ajax-dispatcher ((processor ajax-processor))
+(defmethod create-ajax-dispatcher ((processor ajax-processor))  ;HT
   (create-prefix-dispatcher (server-uri processor)
                             #'(lambda () (process-ajax-request processor))))
 
